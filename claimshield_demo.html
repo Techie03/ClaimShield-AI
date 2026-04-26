@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ClaimShield AI — Live Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+
+  .header {
+    background: #1e3a6e;
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid #2563eb;
+  }
+  .logo { font-size: 22px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+  .logo span { color: #38bdf8; }
+  .status-bar { display: flex; gap: 24px; font-size: 13px; color: #94a3b8; }
+  .status-item strong { color: #e2e8f0; }
+
+  .main { display: flex; gap: 0; height: calc(100vh - 60px); }
+
+  /* LEFT PANEL — claim queue */
+  .queue-panel {
+    width: 380px;
+    background: #1e293b;
+    border-right: 1px solid #334155;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #334155;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .panel-title { font-size: 13px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+  .claim-count { font-size: 12px; color: #64748b; }
+
+  .run-btn {
+    margin: 14px 20px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    width: calc(100% - 40px);
+    transition: background 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .run-btn:hover { background: #1d4ed8; }
+  .run-btn:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+  .claim-list { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+
+  .claim-card {
+    background: #273549;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+  }
+  .claim-card:hover { border-color: #475569; background: #2d3f57; }
+  .claim-card.selected { border-color: #2563eb; background: #1e3260; }
+  .claim-card.flagged { border-color: #dc2626; background: #2d1b1b; }
+  .claim-card.flagged.selected { border-color: #ef4444; background: #3b1a1a; }
+  .claim-card.medium { border-color: #d97706; background: #2d2210; }
+  .claim-card.medium.selected { border-color: #f59e0b; background: #3b2d12; }
+  .claim-card.safe { border-color: #059669; background: #0f2820; }
+
+  .claim-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .claim-id { font-size: 13px; font-weight: 600; color: #cbd5e1; }
+  .risk-badge {
+    font-size: 11px; font-weight: 700; padding: 2px 8px;
+    border-radius: 4px; letter-spacing: 0.5px;
+    display: none;
+  }
+  .risk-badge.high { background: #dc2626; color: #fff; display: inline-block; }
+  .risk-badge.medium { background: #d97706; color: #fff; display: inline-block; }
+  .risk-badge.low { background: #059669; color: #fff; display: inline-block; }
+
+  .claim-meta { font-size: 12px; color: #64748b; }
+  .claim-meta span { color: #94a3b8; }
+
+  .score-bar-wrap { margin-top: 8px; display: none; }
+  .score-bar-wrap.visible { display: block; }
+  .score-bar-track { height: 4px; background: #334155; border-radius: 2px; overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease; width: 0; }
+  .score-bar-fill.high { background: #dc2626; }
+  .score-bar-fill.medium { background: #d97706; }
+  .score-bar-fill.low { background: #059669; }
+  .score-label { font-size: 11px; color: #64748b; margin-top: 4px; display: flex; justify-content: space-between; }
+
+  /* RIGHT PANEL — detail */
+  .detail-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .scene-before {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 16px;
+    color: #475569;
+  }
+  .scene-before .icon { font-size: 64px; opacity: 0.3; }
+  .scene-before p { font-size: 16px; max-width: 320px; text-align: center; line-height: 1.6; }
+
+  .detail-content { display: none; flex: 1; flex-direction: column; overflow-y: auto; padding: 24px 28px; }
+  .detail-content.visible { display: flex; }
+
+  .detail-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+  .detail-claim-id { font-size: 22px; font-weight: 700; color: #fff; }
+  .detail-status {
+    padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .detail-status.flagged { background: #dc2626; color: #fff; }
+  .detail-status.review { background: #d97706; color: #fff; }
+  .detail-status.clear { background: #059669; color: #fff; }
+
+  .score-display {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .score-num {
+    font-size: 52px;
+    font-weight: 800;
+    line-height: 1;
+  }
+  .score-num.high { color: #ef4444; }
+  .score-num.medium { color: #f59e0b; }
+  .score-num.low { color: #10b981; }
+  .score-info { flex: 1; }
+  .score-info h3 { font-size: 14px; color: #94a3b8; margin-bottom: 6px; }
+  .score-info p { font-size: 13px; color: #64748b; line-height: 1.5; }
+  .latency-tag { font-size: 12px; color: #38bdf8; margin-top: 8px; font-weight: 600; }
+
+  .section-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; font-weight: 600; }
+
+  .shap-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+  .shap-row { display: flex; align-items: center; gap: 12px; }
+  .shap-feature { font-size: 13px; color: #cbd5e1; width: 260px; flex-shrink: 0; }
+  .shap-bar-track { flex: 1; height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+  .shap-bar-fill { height: 100%; border-radius: 3px; transition: width 1s ease 0.5s; }
+  .shap-bar-fill.pos { background: #ef4444; }
+  .shap-bar-fill.neg { background: #10b981; }
+  .shap-val { font-size: 12px; font-weight: 600; width: 42px; text-align: right; flex-shrink: 0; }
+  .shap-val.pos { color: #ef4444; }
+  .shap-val.neg { color: #10b981; }
+
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .info-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 14px 16px; }
+  .info-card-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; }
+  .info-card-value { font-size: 15px; font-weight: 600; color: #e2e8f0; }
+  .info-card-value.red { color: #ef4444; }
+  .info-card-value.amber { color: #f59e0b; }
+
+  .alert-box {
+    background: #3b1a1a;
+    border: 1px solid #dc2626;
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    animation: pulse-border 2s infinite;
+  }
+  @keyframes pulse-border {
+    0%, 100% { border-color: #dc2626; }
+    50% { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(220,38,38,0.15); }
+  }
+  .alert-dot { width: 10px; height: 10px; border-radius: 50%; background: #dc2626; flex-shrink: 0;
+    animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .alert-text { font-size: 13px; color: #fca5a5; font-weight: 600; }
+  .alert-sub { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+
+  .reset-btn {
+    background: transparent;
+    border: 1px solid #334155;
+    color: #64748b;
+    padding: 8px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    margin-top: 8px;
+    transition: all 0.2s;
+  }
+  .reset-btn:hover { border-color: #475569; color: #94a3b8; }
+
+  .processing-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.7);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .processing-overlay.active { display: flex; }
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid #334155;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .processing-text { font-size: 16px; color: #94a3b8; }
+  .processing-sub { font-size: 13px; color: #475569; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Claim<span>Shield</span> AI <span style="font-size:13px;font-weight:400;color:#64748b;margin-left:8px;">Real-Time Fraud Detection</span></div>
+  <div class="status-bar">
+    <div class="status-item">Carrier: <strong>Pilot — Regional Auto</strong></div>
+    <div class="status-item">Model: <strong>v2.4.1</strong></div>
+    <div class="status-item" id="live-status">Status: <strong style="color:#10b981;">● Live</strong></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- LEFT: Claim Queue -->
+  <div class="queue-panel">
+    <div class="panel-header">
+      <div class="panel-title">Claim Queue</div>
+      <div class="claim-count" id="queue-count">47 unreviewed</div>
+    </div>
+
+    <button class="run-btn" id="run-btn" onclick="runClaimShield()">
+      ▶  Run ClaimShield AI
+    </button>
+
+    <div class="claim-list" id="claim-list"></div>
+  </div>
+
+  <!-- RIGHT: Detail Panel -->
+  <div class="detail-panel">
+    <div class="scene-before" id="scene-before">
+      <div class="icon">🗂️</div>
+      <p>47 claims awaiting review. No scoring applied. Select a claim or run ClaimShield to begin analysis.</p>
+    </div>
+
+    <div class="detail-content" id="detail-content">
+      <!-- populated dynamically -->
+    </div>
+  </div>
+</div>
+
+<!-- Processing overlay -->
+<div class="processing-overlay" id="processing">
+  <div class="spinner"></div>
+  <div class="processing-text">ClaimShield AI — Scoring batch...</div>
+  <div class="processing-sub" id="proc-sub">Initializing feature pipeline</div>
+</div>
+
+<script>
+// ── DATA ─────────────────────────────────────────────────────────────────
+const claims = [
+  {
+    id: "CLM-2024-9841", type: "Auto — Collision", amount: "$22,400",
+    date: "Nov 12 2024", insured: "Marcus T.", state: "TX",
+    score: 0.91, tier: "high",
+    shap: [
+      { name: "Claim velocity: 4.2 SD above policyholder baseline", val: 0.31, dir: "pos" },
+      { name: "Geolocation delta: 340 mi from insured property", val: 0.27, dir: "pos" },
+      { name: "Provider network centrality: top 2% flagged cluster", val: 0.19, dir: "pos" },
+      { name: "Narrative embedding distance: 0.78 from legit centroid", val: 0.14, dir: "pos" },
+      { name: "Prior claim count: 3 claims in 18 months", val: 0.09, dir: "pos" },
+      { name: "Policyholder tenure: 14 months", val: -0.04, dir: "neg" },
+    ],
+    latency: "94ms", alert: "Routed to SIU queue — Organized ring pattern",
+    adjuster: "Auto-held — No payout pending review"
+  },
+  {
+    id: "CLM-2024-9799", type: "Auto — Theft", amount: "$18,950",
+    date: "Nov 14 2024", insured: "Jennifer K.", state: "FL",
+    score: 0.83, tier: "high",
+    shap: [
+      { name: "Theft report filed 6 days after alleged incident", val: 0.28, dir: "pos" },
+      { name: "Vehicle GPS contradicts reported location", val: 0.24, dir: "pos" },
+      { name: "Provider: 2nd claim same shop in 4 months", val: 0.18, dir: "pos" },
+      { name: "Claim amount: 94th percentile for vehicle make/year", val: 0.13, dir: "pos" },
+      { name: "Policy age: 47 days", val: 0.08, dir: "pos" },
+      { name: "Clean driving record — 7 years", val: -0.06, dir: "neg" },
+    ],
+    latency: "112ms", alert: "Routed to SIU queue — Temporal anomaly",
+    adjuster: "Auto-held — No payout pending review"
+  },
+  {
+    id: "CLM-2024-9834", type: "Homeowners — Water", amount: "$8,200",
+    date: "Nov 13 2024", insured: "Robert H.", state: "TX",
+    score: 0.76, tier: "high",
+    shap: [
+      { name: "Duplicate contractor invoice detected across 3 claims", val: 0.22, dir: "pos" },
+      { name: "Claim filed during policy lapse window", val: 0.21, dir: "pos" },
+      { name: "Weather data: no precipitation in ZIP code ±7 days", val: 0.19, dir: "pos" },
+      { name: "Contractor: flagged in cross-carrier graph", val: 0.14, dir: "pos" },
+      { name: "Claim amount matches prior claim exactly", val: 0.10, dir: "pos" },
+      { name: "Property owned 11 years — long tenure", val: -0.08, dir: "neg" },
+    ],
+    latency: "87ms", alert: "Flagged for adjuster review — Contractor pattern",
+    adjuster: "Escalated to senior adjuster"
+  },
+  {
+    id: "CLM-2024-9851", type: "Auto — Rear-end", amount: "$6,750",
+    date: "Nov 15 2024", insured: "Ana M.", state: "TX",
+    score: 0.74, tier: "high",
+    shap: [
+      { name: "Medical provider: 97th percentile billing per claim", val: 0.25, dir: "pos" },
+      { name: "Attorney involvement: pre-suit demand day 2", val: 0.20, dir: "pos" },
+      { name: "Injury claim: no ER visit, first visit day 4", val: 0.16, dir: "pos" },
+      { name: "3 claimants same accident, same provider", val: 0.13, dir: "pos" },
+      { name: "Prior attorney-rep claim 18 months ago", val: 0.07, dir: "pos" },
+      { name: "Police report filed — supports event", val: -0.07, dir: "neg" },
+    ],
+    latency: "104ms", alert: "Flagged for adjuster review — Medical billing pattern",
+    adjuster: "Escalated to senior adjuster"
+  },
+  {
+    id: "CLM-2024-9812", type: "Auto — Collision", amount: "$4,100",
+    date: "Nov 11 2024", insured: "David L.", state: "TX",
+    score: 0.41, tier: "medium",
+    shap: [
+      { name: "Claim amount slightly above repair estimate average", val: 0.12, dir: "pos" },
+      { name: "First claim this policyholder — limited history", val: 0.09, dir: "pos" },
+      { name: "Repair shop: no prior flags", val: -0.05, dir: "neg" },
+      { name: "Police report: supports account", val: -0.08, dir: "neg" },
+      { name: "Policyholder tenure: 6 years", val: -0.10, dir: "neg" },
+    ],
+    latency: "81ms", alert: null,
+    adjuster: "Standard processing — No hold"
+  },
+  {
+    id: "CLM-2024-9856", type: "Homeowners — Wind", amount: "$3,800",
+    date: "Nov 16 2024", insured: "Sarah W.", state: "TX",
+    score: 0.12, tier: "low",
+    shap: [
+      { name: "Storm event confirmed in ZIP code", val: -0.14, dir: "neg" },
+      { name: "Contractor: licensed, no prior flags", val: -0.10, dir: "neg" },
+      { name: "Claim amount: within expected range for damage type", val: -0.08, dir: "neg" },
+      { name: "Policyholder tenure: 9 years, zero prior claims", val: -0.12, dir: "neg" },
+      { name: "Photos submitted with claim — complete documentation", val: -0.09, dir: "neg" },
+    ],
+    latency: "78ms", alert: null,
+    adjuster: "Auto-approved — Proceed to payment"
+  },
+];
+
+// Fill remaining as generic low/medium
+for (let i = claims.length; i < 47; i++) {
+  const tier = i < 35 ? "low" : "medium";
+  claims.push({
+    id: `CLM-2024-${9700 + i}`, type: i % 3 === 0 ? "Auto — Collision" : i % 3 === 1 ? "Homeowners — Fire" : "Auto — Theft",
+    amount: `$${(2000 + i * 180).toLocaleString()}`,
+    date: `Nov ${10 + (i % 8)} 2024`, insured: "Policyholder", state: "TX",
+    score: tier === "low" ? (0.05 + Math.random() * 0.25) : (0.35 + Math.random() * 0.30),
+    tier,
+    shap: [], latency: `${75 + i % 40}ms`, alert: null, adjuster: "Standard processing"
+  });
+}
+
+let scored = false;
+let selectedIdx = null;
+
+function buildQueue(scored) {
+  const list = document.getElementById('claim-list');
+  list.innerHTML = '';
+  let sorted = [...claims];
+  if (scored) sorted.sort((a,b) => b.score - a.score);
+
+  sorted.forEach((c, i) => {
+    const card = document.createElement('div');
+    card.className = 'claim-card' + (scored && c.tier !== 'low' ? ' ' + c.tier : '');
+    card.dataset.idx = i;
+    card.innerHTML = `
+      <div class="claim-top">
+        <div class="claim-id">${c.id}</div>
+        ${scored ? `<div class="risk-badge ${c.tier}">${c.tier.toUpperCase()}</div>` : ''}
+      </div>
+      <div class="claim-meta">${c.type} &nbsp;·&nbsp; <span>${c.amount}</span> &nbsp;·&nbsp; ${c.date}</div>
+      <div class="score-bar-wrap ${scored ? 'visible' : ''}">
+        <div class="score-bar-track"><div class="score-bar-fill ${c.tier}" style="width:${scored ? Math.round(c.score*100) : 0}%"></div></div>
+        <div class="score-label"><span>Risk</span><span>${scored ? c.score.toFixed(2) : '—'}</span></div>
+      </div>`;
+    card.addEventListener('click', () => {
+      if (!scored) return;
+      selectClaim(i, sorted);
+    });
+    list.appendChild(card);
+  });
+}
+
+function selectClaim(i, sortedList) {
+  selectedIdx = i;
+  document.querySelectorAll('.claim-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.claim-card')[i].classList.add('selected');
+  showDetail(sortedList[i]);
+}
+
+function showDetail(c) {
+  document.getElementById('scene-before').style.display = 'none';
+  const panel = document.getElementById('detail-content');
+  panel.classList.add('visible');
+
+  const statusLabel = c.tier === 'high' ? 'FLAGGED — SIU' : c.tier === 'medium' ? 'REVIEW' : 'CLEAR';
+  const statusClass = c.tier === 'high' ? 'flagged' : c.tier === 'medium' ? 'review' : 'clear';
+  const scoreClass  = c.tier;
+
+  const shapHTML = c.shap.length ? c.shap.map(s => `
+    <div class="shap-row">
+      <div class="shap-feature">${s.name}</div>
+      <div class="shap-bar-track"><div class="shap-bar-fill ${s.dir}" style="width:${Math.abs(s.val)*200}%"></div></div>
+      <div class="shap-val ${s.dir}">${s.dir === 'pos' ? '+' : ''}${s.val.toFixed(2)}</div>
+    </div>`).join('') : '<div style="color:#475569;font-size:13px;">Feature detail not available for this claim.</div>';
+
+  const alertHTML = c.alert ? `
+    <div class="alert-box">
+      <div class="alert-dot"></div>
+      <div>
+        <div class="alert-text">⚠ ${c.alert}</div>
+        <div class="alert-sub">${c.adjuster}</div>
+      </div>
+    </div>` : `
+    <div style="background:#0f2820;border:1px solid #059669;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+      <span style="color:#10b981;font-weight:600;font-size:13px;">✓ No alert triggered — ${c.adjuster}</span>
+    </div>`;
+
+  panel.innerHTML = `
+    <div class="detail-top">
+      <div class="detail-claim-id">${c.id}</div>
+      <div class="detail-status ${statusClass}">${statusLabel}</div>
+    </div>
+
+    <div class="score-display">
+      <div class="score-num ${scoreClass}">${c.score.toFixed(2)}</div>
+      <div class="score-info">
+        <h3>COMPOSITE RISK SCORE</h3>
+        <p>RiskScore(x) = α·A(x) + (1−α)·P(fraud|x) &nbsp;|&nbsp; α = 0.40</p>
+        <p>Threshold: 0.72 &nbsp;|&nbsp; Line of business: Auto</p>
+        <div class="latency-tag">⚡ Inference latency: ${c.latency}</div>
+      </div>
+    </div>
+
+    <div class="info-grid">
+      <div class="info-card">
+        <div class="info-card-label">Claim Type</div>
+        <div class="info-card-value">${c.type}</div>
+      </div>
+      <div class="info-card">
+        <div class="info-card-label">Claim Amount</div>
+        <div class="info-card-value ${c.tier === 'high' ? 'red' : ''}">${c.amount}</div>
+      </div>
+      <div class="info-card">
+        <div class="info-card-label">Filed</div>
+        <div class="info-card-value">${c.date}</div>
+      </div>
+      <div class="info-card">
+        <div class="info-card-label">Insured</div>
+        <div class="info-card-value">${c.insured} — ${c.state}</div>
+      </div>
+    </div>
+
+    ${alertHTML}
+
+    <div class="section-label">SHAP Feature Attribution — Top Fraud Signals</div>
+    <div class="shap-grid">${shapHTML}</div>
+
+    <button class="reset-btn" onclick="resetDemo()">← Back to queue</button>
+  `;
+}
+
+function resetDemo() {
+  document.getElementById('scene-before').style.display = 'flex';
+  const panel = document.getElementById('detail-content');
+  panel.classList.remove('visible');
+  panel.innerHTML = '';
+}
+
+async function runClaimShield() {
+  const btn = document.getElementById('run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Processing...';
+
+  const overlay = document.getElementById('processing');
+  const sub = document.getElementById('proc-sub');
+  overlay.classList.add('active');
+
+  const steps = [
+    'Initializing feature pipeline...',
+    'Engineering 47 features per claim...',
+    'Running Isolation Forest — anomaly scoring...',
+    'Running logistic regression — fraud probability...',
+    'Computing composite RiskScore for 47 claims...',
+    'Routing alerts — SIU queue updated.',
+  ];
+  for (const s of steps) {
+    sub.textContent = s;
+    await new Promise(r => setTimeout(r, 420));
+  }
+  overlay.classList.remove('active');
+
+  scored = true;
+  buildQueue(true);
+  document.getElementById('queue-count').textContent = '4 flagged · 47 scored';
+  btn.textContent = '✓ Scoring complete — select a claim';
+
+  // Auto-select top claim after short pause
+  setTimeout(() => {
+    const sorted = [...claims].sort((a,b) => b.score - a.score);
+    selectClaim(0, sorted);
+  }, 600);
+}
+
+// Init
+buildQueue(false);
+</script>
+</body>
+</html>
